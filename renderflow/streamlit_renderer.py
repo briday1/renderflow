@@ -1,0 +1,240 @@
+"""Generic Streamlit renderer for AppSpec providers."""
+
+from __future__ import annotations
+
+import html
+import os
+import sys
+import time
+from typing import Any
+
+import pandas as pd
+import streamlit as st
+
+from renderflow.discovery import load_app_spec
+
+
+def _render_param_inputs(prefix: str, params) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for spec in params:
+        key = f"{prefix}_{spec.key}"
+        if spec.type == "dropdown":
+            options = [opt.get("value") for opt in spec.options]
+            labels_map = {opt.get("value"): opt.get("label", opt.get("value")) for opt in spec.options}
+            default_idx = options.index(spec.default) if spec.default in options else 0
+            val = st.sidebar.selectbox(
+                spec.label,
+                options=options,
+                index=default_idx if options else 0,
+                format_func=lambda x: labels_map.get(x, x),
+                key=key,
+                help=spec.help or None,
+            )
+        elif spec.type == "number":
+            val = st.sidebar.number_input(
+                spec.label,
+                value=float(spec.default) if spec.default is not None else 0.0,
+                min_value=float(spec.min) if spec.min is not None else None,
+                max_value=float(spec.max) if spec.max is not None else None,
+                step=float(spec.step) if spec.step is not None else None,
+                key=key,
+                help=spec.help or None,
+            )
+        elif spec.type == "checkbox":
+            val = st.sidebar.checkbox(
+                spec.label,
+                value=bool(spec.default) if spec.default is not None else False,
+                key=key,
+                help=spec.help or None,
+            )
+        else:
+            val = st.sidebar.text_input(
+                spec.label,
+                value=str(spec.default) if spec.default is not None else "",
+                key=key,
+                help=spec.help or None,
+            )
+        values[spec.key] = val
+    return values
+
+
+def _render_results(results: dict[str, Any]):
+    if not results:
+        st.info("No results returned.")
+        return
+
+    if "results" in results:
+        for item in results["results"]:
+            if item["type"] == "text":
+                for text in item.get("content", []):
+                    st.markdown(text)
+            elif item["type"] == "table":
+                st.markdown(f"**{item.get('title', 'Table')}**")
+                data = item.get("data", {})
+                if isinstance(data, dict):
+                    st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(data, use_container_width=True)
+            elif item["type"] == "plot":
+                st.plotly_chart(item.get("figure"), use_container_width=True)
+        return
+
+    for text in results.get("text", []):
+        st.markdown(text)
+    for table in results.get("tables", []):
+        st.markdown(f"**{table.get('title', 'Table')}**")
+        data = table.get("data", {})
+        if isinstance(data, dict):
+            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(data, use_container_width=True)
+    for fig in results.get("plots", []):
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def _make_progress_callback(status_panel):
+    with status_panel:
+        progress_window = st.empty()
+    completed_entries = []
+    progress_state = {"active_entry": None}
+    step_start_times = {}
+
+    def render_progress_window():
+        active_entry = progress_state["active_entry"]
+        lines = completed_entries + ([active_entry] if active_entry else [])
+        html_lines = []
+        for line in lines:
+            if line.startswith("__RUNNING__::"):
+                running_text = html.escape(line.replace("__RUNNING__::", "", 1))
+                html_lines.append("<li><span class='wr-live-spinner'></span>" f"{running_text}</li>")
+            else:
+                html_lines.append(f"<li>{html.escape(line)}</li>")
+        progress_window.markdown(
+            (
+                "<style>"
+                ".wr-live-scroll{max-height:12rem;overflow-y:auto;padding-right:0.3rem;}"
+                ".wr-live-list{margin:0.25rem 0 0.25rem 1.1rem;padding:0;}"
+                ".wr-live-list li{margin:0.2rem 0;list-style:disc;}"
+                ".wr-live-spinner{display:inline-block;width:0.85rem;height:0.85rem;"
+                "margin-right:0.45rem;border:2px solid currentColor;border-top-color:transparent;"
+                "border-radius:50%;vertical-align:-0.1rem;animation:wrspin 0.8s linear infinite;}"
+                "@keyframes wrspin{to{transform:rotate(360deg);}}"
+                "</style>"
+                f"<div class='wr-live-scroll'><ul class='wr-live-list'>{''.join(html_lines)}</ul></div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+    def progress_callback(step, status, detail=""):
+        line = f"{step}"
+        if detail:
+            line += f" - {detail}"
+        if status == "running":
+            step_start_times[step] = time.perf_counter()
+            progress_state["active_entry"] = f"__RUNNING__::{line}"
+            status_panel.update(label=f"Executing: {step}...", state="running", expanded=True)
+        elif status == "done":
+            started = step_start_times.get(step)
+            if started is not None:
+                elapsed = time.perf_counter() - started
+                completed_entries.append(f"OK {line} ({elapsed:.3f}s)")
+            else:
+                completed_entries.append(f"OK {line}")
+            progress_state["active_entry"] = None
+        elif status == "failed":
+            completed_entries.append(f"FAILED {line}")
+            progress_state["active_entry"] = None
+        render_progress_window()
+
+    return progress_callback
+
+
+def run_renderer(provider: str):
+    st.set_page_config(page_title="Workflow Renderer", layout="wide")
+    st.title("Workflow Renderer")
+    st.caption(f"Provider: `{provider}`")
+
+    try:
+        app_spec = load_app_spec(provider)
+    except Exception as exc:
+        st.error(f"Failed to load app definition for provider {provider}: {exc}")
+        st.stop()
+
+    st.sidebar.header(app_spec.app_name)
+
+    if "initialized_context" not in st.session_state:
+        st.session_state.initialized_context = None
+    if "init_signature" not in st.session_state:
+        st.session_state.init_signature = None
+    if "last_results" not in st.session_state:
+        st.session_state.last_results = None
+
+    if not app_spec.initializers:
+        st.error("No initializers defined by provider.")
+        st.stop()
+
+    initializer = app_spec.initializers[0]
+    st.sidebar.subheader("Initialization")
+    init_values = _render_param_inputs("init", initializer.params)
+    init_signature = repr(sorted(init_values.items()))
+
+    if st.session_state.initialized_context is None or st.session_state.init_signature != init_signature:
+        try:
+            st.session_state.initialized_context = initializer.initialize(init_values)
+            st.session_state.init_signature = init_signature
+            st.session_state.last_results = None
+        except Exception as exc:
+            st.sidebar.error(f"Initialization failed: {exc}")
+            st.session_state.initialized_context = None
+
+    context = st.session_state.initialized_context
+    if context is None:
+        st.info("Fix initialization inputs in the sidebar to load context.")
+        return
+
+    if not app_spec.workflows:
+        st.warning("No workflows discovered.")
+        return
+
+    st.sidebar.markdown("---")
+    workflow_ids = [w.id for w in app_spec.workflows]
+    workflow_map = {w.id: w for w in app_spec.workflows}
+    selected_id = st.sidebar.selectbox("Workflow", options=workflow_ids, format_func=lambda x: workflow_map[x].name)
+    wf = workflow_map[selected_id]
+    if wf.description:
+        st.sidebar.caption(wf.description)
+
+    st.sidebar.subheader("Workflow Parameters")
+    wf_values = _render_param_inputs(f"wf_{wf.id}", wf.params)
+    run_clicked = st.sidebar.button("Execute Workflow", use_container_width=True)
+
+    if run_clicked:
+        status_panel = st.status("Executing workflow...", state="running", expanded=True)
+        callback = _make_progress_callback(status_panel)
+        wf_values["_progress_callback"] = callback
+        try:
+            st.session_state.last_results = wf.run(context, wf_values)
+            status_panel.update(label="Workflow complete", state="complete")
+        except Exception as exc:
+            status_panel.update(label=f"Workflow failed: {exc}", state="error")
+            st.session_state.last_results = {
+                "results": [{"type": "text", "content": [f"FAILED Workflow failed: {exc}"]}]
+            }
+
+    if st.session_state.last_results is not None:
+        _render_results(st.session_state.last_results)
+    else:
+        st.info("Choose a workflow and click Execute Workflow.")
+
+
+def launch_streamlit_renderer(provider: str):
+    """Launch the generic Streamlit renderer for a specific provider."""
+    os.environ["RENDERFLOW_PROVIDER"] = provider
+    import streamlit.web.cli as stcli
+
+    sys.argv = ["streamlit", "run", __file__]
+    sys.exit(stcli.main())
+
+
+if __name__ == "__main__":
+    run_renderer(os.environ.get("RENDERFLOW_PROVIDER", ""))

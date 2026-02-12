@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "renderflow"
+version = "0.1.0"
+description = "Generic workflow app runtime and Streamlit renderer with provider plugins"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Brian Day" }
+]
+dependencies = [
+    "streamlit>=1.31.0",
+    "pandas>=2.0.0"
+]
+
+[project.scripts]
+renderflow = "renderflow.cli:main"
+workflow-renderer-streamlit = "renderflow.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["renderflow*"]
