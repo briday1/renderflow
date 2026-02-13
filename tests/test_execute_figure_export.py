@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from renderflow import cli
-from renderflow.contracts import AppSpec, InitializerSpec, ParamSpec, WorkflowSpec
+from renderflow.contracts import AppSpec, ParamSpec, WorkflowSpec
 from renderflow.results import save_figures
 
 
@@ -29,22 +29,6 @@ def _make_appspec():
         app_name="dummy",
         initializers=[],
         workflows=[WorkflowSpec(id="wf", name="wf", description="", params=[], run=_run)],
-    )
-
-
-def _make_appspec_with_initializer(initialize):
-    return AppSpec(
-        app_name="dummy",
-        initializers=[
-            InitializerSpec(
-                id="init",
-                name="init",
-                description="",
-                params=[ParamSpec(key="x", label="x", type="text", default="")],
-                initialize=initialize,
-            )
-        ],
-        workflows=[WorkflowSpec(id="wf", name="wf", description="", params=[], run=lambda ctx, p: {"results": []})],
     )
 
 
@@ -148,9 +132,24 @@ def test_execute_invalid_workflow_results_shape(monkeypatch):
         cli.main(["execute", "--provider", "dummy", "--workflow", "wf", "--output", "terminal"])
 
 
-def test_execute_initializer_must_return_dict(monkeypatch):
-    app = _make_appspec_with_initializer(lambda params: ["not-a-dict"])
+def test_execute_init_alias_maps_to_workflow_params(monkeypatch):
+    def _run(context, params):
+        return {"results": [{"type": "text", "content": [str(params.get("x", ""))]}]}
+
+    app = AppSpec(
+        app_name="dummy",
+        initializers=[],
+        workflows=[
+            WorkflowSpec(
+                id="wf",
+                name="wf",
+                description="",
+                params=[ParamSpec(key="x", label="x", type="text", default="")],
+                run=_run,
+            )
+        ],
+    )
     monkeypatch.setattr(cli, "load_app_spec", lambda provider: app)
 
-    with pytest.raises(SystemExit):
-        cli.main(["execute", "--provider", "dummy", "--workflow", "wf", "--output", "none"])
+    # --init is now a deprecated alias for --param
+    cli.main(["execute", "--provider", "dummy", "--workflow", "wf", "--init", "x=hello", "--output", "none"])

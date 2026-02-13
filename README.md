@@ -25,7 +25,7 @@ List provider workflows:
 renderflow list-workflows --provider crsd-inspector
 ```
 
-Show interpreted initializer + workflow parameters:
+Show interpreted workflow parameters:
 
 ```bash
 renderflow show-params --provider crsd-inspector --workflow signal_analysis
@@ -37,7 +37,7 @@ Execute a workflow in terminal mode:
 renderflow execute \
   --provider crsd-inspector \
   --workflow signal_analysis \
-  --init crsd_directory=examples \
+  --param crsd_directory=examples \
   --param prf_hz=1000 \
   --output terminal
 ```
@@ -50,7 +50,7 @@ Execute and export both:
 renderflow execute \
   --provider crsd-inspector \
   --workflow signal_analysis \
-  --init crsd_directory=examples \
+  --param crsd_directory=examples \
   --html output/report.html \
   --save-figures-dir output/figures \
   --figure-format html
@@ -62,7 +62,7 @@ Add per-figure JSON in the same run:
 renderflow execute \
   --provider crsd-inspector \
   --workflow signal_analysis \
-  --init crsd_directory=examples \
+  --param crsd_directory=examples \
   --html output/report.html \
   --save-figures-dir output/figures \
   --figure-format html \
@@ -75,7 +75,7 @@ Export multiple figure formats in a single run:
 renderflow execute \
   --provider crsd-inspector \
   --workflow signal_analysis \
-  --init crsd_directory=examples \
+  --param crsd_directory=examples \
   --save-figures-dir output/figures \
   --figure-format html \
   --figure-format json
@@ -87,7 +87,7 @@ Comma-separated format lists are also accepted:
 renderflow execute \
   --provider crsd-inspector \
   --workflow signal_analysis \
-  --init crsd_directory=examples \
+  --param crsd_directory=examples \
   --html output/report.html \
   --save-figures-dir output/figures \
   --figure-format html,json
@@ -132,9 +132,6 @@ Minimum return contract from `run_workflow(...)`:
   - `type` in `text | table | plot | code`
   - if `type == "plot"`, item must include `figure`
 
-Initializer contract:
-- if `initialize(params)` is provided, it must return a `dict` context.
-
 ## Provider Contract Options
 
 ### 1) Explicit `AppSpec` (fully explicit)
@@ -155,8 +152,7 @@ If no `app_definition` exists, `renderflow` auto-builds from:
 - optional `<provider>.renderflow` module:
   - `APP_NAME = "..."`
   - `WORKFLOWS_PACKAGE = "provider.custom_workflows"` (optional)
-  - `INIT_PARAMS = {...}` or list of `ParamSpec`/dict
-  - `initialize(params) -> dict` (optional)
+  - optional custom metadata constants for provider setup
 
 Workflow parameters are pulled from:
 1. `workflow.params` if a `workflow` object exists in the module

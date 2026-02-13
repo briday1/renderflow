@@ -1,7 +1,6 @@
 # Minimal Provider Example
 
 This is a tiny provider package that demonstrates the `renderflow` API with:
-- one initializer (`minimal_provider.renderflow:initialize`)
 - two workflows under `minimal_provider.workflows`
 - workflow params automatically discovered from `workflow.params`
 
@@ -40,7 +39,7 @@ Execute with terminal output:
 renderflow execute \
   --provider minimal-provider \
   --workflow greeting \
-  --init name=Ada \
+  --param name=Ada \
   --param excited=true
 ```
 
@@ -50,7 +49,7 @@ Execute with combined report plus per-figure exports:
 renderflow execute \
   --provider minimal-provider \
   --workflow series_plot \
-  --init name=Ada \
+  --param base_value=12 \
   --param points=8 \
   --html output/minimal_report.html \
   --save-figures-dir output/minimal_figures \
@@ -96,8 +95,6 @@ Provider package contract used here:
 - `minimal_provider/renderflow.py`
   - `APP_NAME`
   - `WORKFLOWS_PACKAGE`
-  - `INIT_PARAMS`
-  - `initialize(params) -> dict`
 - `minimal_provider/workflows/*.py`
   - `workflow = Workflow(name=..., description=...)`
   - `workflow.params = {...}`

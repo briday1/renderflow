@@ -117,7 +117,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="Initializer parameter value (repeatable).",
+        help="Deprecated alias for --param (repeatable).",
     )
     execute.add_argument(
         "--param",
@@ -181,11 +181,6 @@ def _cmd_show_params(provider: str, workflow_id: str):
     wf = wf_map[workflow_id]
     print(f"Provider: {provider}")
     print(f"Workflow: {wf.id} ({wf.name})")
-    if app.initializers:
-        print("\nInitializer parameters:")
-        _print_specs(app.initializers[0].params)
-    else:
-        print("\nInitializer parameters: (none)")
     print("\nWorkflow parameters:")
     _print_specs(wf.params)
 
@@ -199,19 +194,11 @@ def _cmd_execute(args):
 
     raw_init = _parse_kv(args.init)
     raw_wf = _parse_kv(args.param)
+    merged_raw = dict(raw_init)
+    merged_raw.update(raw_wf)
 
-    if app.initializers:
-        initializer = app.initializers[0]
-        init_values = _cast_param_map(raw_init, initializer.params)
-        context = initializer.initialize(init_values)
-        if not isinstance(context, dict):
-            raise InvalidWorkflowResultsError(
-                f"Initializer '{initializer.id}' must return a dict context, got {type(context).__name__}"
-            )
-    else:
-        context = {}
-
-    wf_values = _cast_param_map(raw_wf, wf.params)
+    context = {}
+    wf_values = _cast_param_map(merged_raw, wf.params)
     results = wf.run(context, wf_values)
 
     if args.html:

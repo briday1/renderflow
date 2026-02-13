@@ -178,49 +178,26 @@ def run_renderer(provider: str):
 
     st.sidebar.header(app_spec.app_name)
 
-    if "initialized_context" not in st.session_state:
-        st.session_state.initialized_context = None
-    if "init_signature" not in st.session_state:
-        st.session_state.init_signature = None
     if "last_results" not in st.session_state:
         st.session_state.last_results = None
 
-    if app_spec.initializers:
-        initializer = app_spec.initializers[0]
-        st.sidebar.subheader("Initialization")
-        init_values = _render_param_inputs("init", initializer.params)
-        init_signature = repr(sorted(init_values.items()))
-
-        if st.session_state.initialized_context is None or st.session_state.init_signature != init_signature:
-            try:
-                st.session_state.initialized_context = initializer.initialize(init_values)
-                if not isinstance(st.session_state.initialized_context, dict):
-                    raise InvalidWorkflowResultsError(
-                        f"Initializer '{initializer.id}' must return a dict context, "
-                        f"got {type(st.session_state.initialized_context).__name__}"
-                    )
-                st.session_state.init_signature = init_signature
-                st.session_state.last_results = None
-            except Exception as exc:
-                st.sidebar.error(f"Initialization failed: {exc}")
-                st.session_state.initialized_context = None
-    elif st.session_state.initialized_context is None:
-        st.session_state.initialized_context = {}
-        st.session_state.init_signature = "no-init"
-
-    context = st.session_state.initialized_context
-    if context is None:
-        st.info("Fix initialization inputs in the sidebar to load context.")
-        return
+    context: dict[str, Any] = {}
 
     if not app_spec.workflows:
         st.warning("No workflows discovered.")
         return
 
-    st.sidebar.markdown("---")
     workflow_ids = [w.id for w in app_spec.workflows]
     workflow_map = {w.id: w for w in app_spec.workflows}
-    selected_id = st.sidebar.selectbox("Workflow", options=workflow_ids, format_func=lambda x: workflow_map[x].name)
+    if len(workflow_ids) > 1:
+        selected_id = st.selectbox(
+            "Workflow",
+            options=workflow_ids,
+            format_func=lambda x: workflow_map[x].name,
+        )
+    else:
+        selected_id = workflow_ids[0]
+        st.subheader(workflow_map[selected_id].name)
     wf = workflow_map[selected_id]
     if wf.description:
         st.sidebar.caption(wf.description)
@@ -246,7 +223,10 @@ def run_renderer(provider: str):
         _render_results(st.session_state.last_results)
         _render_figure_export_ui(st.session_state.last_results)
     else:
-        st.info("Choose a workflow and click Execute Workflow.")
+        if len(workflow_ids) > 1:
+            st.info("Choose a workflow and click Execute Workflow.")
+        else:
+            st.info("Click Execute Workflow.")
 
 
 def launch_streamlit_renderer(provider: str):

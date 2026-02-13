@@ -10,6 +10,11 @@ workflow = Workflow(
 )
 
 workflow.params = {
+    "name": {
+        "type": "text",
+        "label": "Name",
+        "default": "World",
+    },
     "excited": {
         "type": "checkbox",
         "label": "Excited",
