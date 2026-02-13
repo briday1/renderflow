@@ -4,8 +4,8 @@ from renderflow.streamlit_renderer import run_renderer
 
 
 def main():
-    # Resolve provider through entrypoint name; no app_definition.py required.
-    run_renderer("minimal-provider")
+    # Module name avoids requiring entrypoint installation in hosted runtimes.
+    run_renderer("minimal_provider")
 
 
 if __name__ == "__main__":
