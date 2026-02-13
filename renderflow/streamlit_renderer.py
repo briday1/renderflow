@@ -137,6 +137,15 @@ def _make_progress_callback(status_panel):
                 "@keyframes wrspin{to{transform:rotate(360deg);}}"
                 "</style>"
                 f"<div class='wr-live-scroll'><ul class='wr-live-list'>{''.join(html_lines)}</ul></div>"
+                "<script>"
+                "(function(){"
+                "const docs=[document,window.parent&&window.parent.document].filter(Boolean);"
+                "for(const d of docs){"
+                "const nodes=d.querySelectorAll('.wr-live-scroll');"
+                "if(nodes.length){const el=nodes[nodes.length-1];el.scrollTop=el.scrollHeight;break;}"
+                "}"
+                "})();"
+                "</script>"
             ),
             unsafe_allow_html=True,
         )
