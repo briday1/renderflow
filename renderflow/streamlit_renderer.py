@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 
 from renderflow.discovery import load_app_spec
+from renderflow.results import InvalidWorkflowResultsError, normalize_results, save_figures
 
 
 def _render_param_inputs(prefix: str, params) -> dict[str, Any]:
@@ -59,37 +60,52 @@ def _render_param_inputs(prefix: str, params) -> dict[str, Any]:
 
 
 def _render_results(results: dict[str, Any]):
-    if not results:
+    try:
+        items = normalize_results(results)
+    except InvalidWorkflowResultsError as exc:
+        st.error(f"Invalid workflow result payload: {exc}")
+        return
+    if not items:
         st.info("No results returned.")
         return
 
-    if "results" in results:
-        for item in results["results"]:
-            if item["type"] == "text":
-                for text in item.get("content", []):
-                    st.markdown(text)
-            elif item["type"] == "table":
-                st.markdown(f"**{item.get('title', 'Table')}**")
-                data = item.get("data", {})
-                if isinstance(data, dict):
-                    st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-                else:
-                    st.dataframe(data, use_container_width=True)
-            elif item["type"] == "plot":
-                st.plotly_chart(item.get("figure"), use_container_width=True)
-        return
+    for item in items:
+        if item["type"] == "text":
+            for text in item.get("content", []):
+                st.markdown(text)
+        elif item["type"] == "table":
+            st.markdown(f"**{item.get('title', 'Table')}**")
+            data = item.get("data", {})
+            if isinstance(data, dict):
+                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(data, use_container_width=True)
+        elif item["type"] == "plot":
+            st.plotly_chart(item.get("figure"), use_container_width=True)
+        elif item["type"] == "code":
+            code_lines = item.get("content", [])
+            if isinstance(code_lines, str):
+                code_lines = [code_lines]
+            st.code("\n".join(str(line) for line in code_lines), language=item.get("language", "text"))
 
-    for text in results.get("text", []):
-        st.markdown(text)
-    for table in results.get("tables", []):
-        st.markdown(f"**{table.get('title', 'Table')}**")
-        data = table.get("data", {})
-        if isinstance(data, dict):
-            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-        else:
-            st.dataframe(data, use_container_width=True)
-    for fig in results.get("plots", []):
-        st.plotly_chart(fig, use_container_width=True)
+
+def _render_figure_export_ui(results: dict[str, Any]):
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Figure Export")
+    export_enabled = st.sidebar.checkbox("Enable Figure Export", value=False)
+    if not export_enabled:
+        return
+    output_dir = st.sidebar.text_input("Output Directory", value="output/figures")
+    fmt = st.sidebar.selectbox("Figure Format", options=["html", "json", "png", "svg"], index=0)
+    if st.sidebar.button("Save Figures", use_container_width=True):
+        try:
+            saved = save_figures(results, output_dir=output_dir, image_format=fmt)
+            if saved:
+                st.sidebar.success(f"Saved {len(saved)} figure(s) to {output_dir}")
+            else:
+                st.sidebar.info("No figures to save.")
+        except Exception as exc:
+            st.sidebar.error(f"Figure export failed: {exc}")
 
 
 def _make_progress_callback(status_panel):
@@ -169,23 +185,28 @@ def run_renderer(provider: str):
     if "last_results" not in st.session_state:
         st.session_state.last_results = None
 
-    if not app_spec.initializers:
-        st.error("No initializers defined by provider.")
-        st.stop()
+    if app_spec.initializers:
+        initializer = app_spec.initializers[0]
+        st.sidebar.subheader("Initialization")
+        init_values = _render_param_inputs("init", initializer.params)
+        init_signature = repr(sorted(init_values.items()))
 
-    initializer = app_spec.initializers[0]
-    st.sidebar.subheader("Initialization")
-    init_values = _render_param_inputs("init", initializer.params)
-    init_signature = repr(sorted(init_values.items()))
-
-    if st.session_state.initialized_context is None or st.session_state.init_signature != init_signature:
-        try:
-            st.session_state.initialized_context = initializer.initialize(init_values)
-            st.session_state.init_signature = init_signature
-            st.session_state.last_results = None
-        except Exception as exc:
-            st.sidebar.error(f"Initialization failed: {exc}")
-            st.session_state.initialized_context = None
+        if st.session_state.initialized_context is None or st.session_state.init_signature != init_signature:
+            try:
+                st.session_state.initialized_context = initializer.initialize(init_values)
+                if not isinstance(st.session_state.initialized_context, dict):
+                    raise InvalidWorkflowResultsError(
+                        f"Initializer '{initializer.id}' must return a dict context, "
+                        f"got {type(st.session_state.initialized_context).__name__}"
+                    )
+                st.session_state.init_signature = init_signature
+                st.session_state.last_results = None
+            except Exception as exc:
+                st.sidebar.error(f"Initialization failed: {exc}")
+                st.session_state.initialized_context = None
+    elif st.session_state.initialized_context is None:
+        st.session_state.initialized_context = {}
+        st.session_state.init_signature = "no-init"
 
     context = st.session_state.initialized_context
     if context is None:
@@ -223,6 +244,7 @@ def run_renderer(provider: str):
 
     if st.session_state.last_results is not None:
         _render_results(st.session_state.last_results)
+        _render_figure_export_ui(st.session_state.last_results)
     else:
         st.info("Choose a workflow and click Execute Workflow.")
 

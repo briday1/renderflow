@@ -3,10 +3,94 @@
 from __future__ import annotations
 
 import argparse
-from typing import Sequence
+import json
+from typing import Any, Sequence
 
-from renderflow.discovery import list_provider_names
-from renderflow.streamlit_renderer import launch_streamlit_renderer
+import pandas as pd
+
+from renderflow.discovery import list_provider_names, load_app_spec
+from renderflow.results import (
+    InvalidFigureFormatError,
+    InvalidWorkflowResultsError,
+    VALID_FIGURE_FORMATS,
+    normalize_figure_formats,
+    normalize_results,
+    render_results_to_html,
+    save_figures,
+)
+
+
+def _parse_kv(values: list[str] | None) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in values or []:
+        if "=" not in item:
+            raise ValueError(f"Expected key=value argument, got: {item}")
+        key, value = item.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"Invalid key in argument: {item}")
+        parsed[key] = value
+    return parsed
+
+
+def _cast_value(raw: str, spec_type: str) -> Any:
+    if spec_type == "checkbox":
+        return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+    if spec_type == "number":
+        text = raw.strip()
+        if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
+            return int(text)
+        return float(text)
+    return raw
+
+
+def _cast_param_map(raw: dict[str, str], specs) -> dict[str, Any]:
+    typed: dict[str, Any] = {}
+    by_key = {spec.key: spec for spec in specs}
+    for key, value in raw.items():
+        spec = by_key.get(key)
+        if spec is None:
+            typed[key] = value
+        else:
+            typed[key] = _cast_value(value, spec.type)
+    for spec in specs:
+        if spec.key not in typed and spec.default is not None:
+            typed[spec.key] = spec.default
+    return typed
+
+
+def _print_results_terminal(results: dict[str, Any]):
+    items = normalize_results(results)
+    if not items:
+        print("No results returned.")
+        return
+    for idx, item in enumerate(items, start=1):
+        item_type = item.get("type")
+        if item_type == "text":
+            content = item.get("content", [])
+            if isinstance(content, str):
+                content = [content]
+            for line in content:
+                print(line)
+        elif item_type == "table":
+            title = item.get("title", f"Table {idx}")
+            print(f"\n{title}")
+            print("-" * len(str(title)))
+            data = item.get("data", {})
+            if isinstance(data, dict):
+                print(pd.DataFrame(data).to_string(index=False))
+            else:
+                print(pd.DataFrame(data).to_string(index=False))
+        elif item_type == "plot":
+            name = item.get("id") or item.get("title") or f"figure_{idx}"
+            print(f"[plot] {name}")
+        elif item_type == "code":
+            language = item.get("language", "text")
+            print(f"\n[code:{language}]")
+            content = item.get("content", [])
+            if isinstance(content, str):
+                content = [content]
+            print("\n".join(str(line) for line in content))
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -17,6 +101,52 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--provider", required=True, help="Provider name registered in renderflow.providers")
 
     sub.add_parser("list-providers", help="List installed providers")
+
+    list_workflows = sub.add_parser("list-workflows", help="List workflows for a provider")
+    list_workflows.add_argument("--provider", required=True)
+
+    show_params = sub.add_parser("show-params", help="Show initializer/workflow parameters")
+    show_params.add_argument("--provider", required=True)
+    show_params.add_argument("--workflow", required=True)
+
+    execute = sub.add_parser("execute", help="Execute one workflow from CLI")
+    execute.add_argument("--provider", required=True)
+    execute.add_argument("--workflow", required=True)
+    execute.add_argument(
+        "--init",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Initializer parameter value (repeatable).",
+    )
+    execute.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Workflow parameter value (repeatable).",
+    )
+    execute.add_argument("--html", help="Optional output path for one combined workflow HTML report.")
+    execute.add_argument(
+        "--save-figures-dir",
+        help="Optional directory to save individual figure files.",
+    )
+    execute.add_argument(
+        "--figure-format",
+        action="append",
+        default=None,
+        metavar="FORMAT[,FORMAT]",
+        help=(
+            "Figure format for --save-figures-dir. Repeatable and comma-separated values are supported. "
+            f"Allowed: {', '.join(VALID_FIGURE_FORMATS)}. Default: html."
+        ),
+    )
+    execute.add_argument(
+        "--output",
+        choices=["terminal", "json", "none"],
+        default="terminal",
+        help="How to emit results to stdout.",
+    )
 
     parser.add_argument(
         "--provider",
@@ -30,24 +160,110 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_specs(specs):
+    for spec in specs:
+        default = f" default={spec.default!r}" if spec.default is not None else ""
+        help_text = f" - {spec.help}" if spec.help else ""
+        print(f"- {spec.key} ({spec.type}){default}{help_text}")
+
+
+def _cmd_list_workflows(provider: str):
+    app = load_app_spec(provider)
+    for wf in app.workflows:
+        print(f"{wf.id}\t{wf.name}")
+
+
+def _cmd_show_params(provider: str, workflow_id: str):
+    app = load_app_spec(provider)
+    wf_map = {wf.id: wf for wf in app.workflows}
+    if workflow_id not in wf_map:
+        raise ValueError(f"Unknown workflow '{workflow_id}'. Available: {', '.join(sorted(wf_map.keys()))}")
+    wf = wf_map[workflow_id]
+    print(f"Provider: {provider}")
+    print(f"Workflow: {wf.id} ({wf.name})")
+    if app.initializers:
+        print("\nInitializer parameters:")
+        _print_specs(app.initializers[0].params)
+    else:
+        print("\nInitializer parameters: (none)")
+    print("\nWorkflow parameters:")
+    _print_specs(wf.params)
+
+
+def _cmd_execute(args):
+    app = load_app_spec(args.provider)
+    wf_map = {wf.id: wf for wf in app.workflows}
+    if args.workflow not in wf_map:
+        raise ValueError(f"Unknown workflow '{args.workflow}'. Available: {', '.join(sorted(wf_map.keys()))}")
+    wf = wf_map[args.workflow]
+
+    raw_init = _parse_kv(args.init)
+    raw_wf = _parse_kv(args.param)
+
+    if app.initializers:
+        initializer = app.initializers[0]
+        init_values = _cast_param_map(raw_init, initializer.params)
+        context = initializer.initialize(init_values)
+        if not isinstance(context, dict):
+            raise InvalidWorkflowResultsError(
+                f"Initializer '{initializer.id}' must return a dict context, got {type(context).__name__}"
+            )
+    else:
+        context = {}
+
+    wf_values = _cast_param_map(raw_wf, wf.params)
+    results = wf.run(context, wf_values)
+
+    if args.html:
+        html_path = render_results_to_html(
+            results,
+            output_path=args.html,
+            title=f"{app.app_name} - {wf.name}",
+        )
+        print(f"HTML report: {html_path}")
+
+    if args.save_figures_dir:
+        formats = normalize_figure_formats(args.figure_format)
+        saved = save_figures(results, output_dir=args.save_figures_dir, image_format=formats)
+        print(f"Saved {len(saved)} figure file(s) to {args.save_figures_dir}")
+
+    if args.output == "terminal":
+        _print_results_terminal(results)
+    elif args.output == "json":
+        print(json.dumps(results, default=str))
+
+
 def main(argv: Sequence[str] | None = None):
     parser = _build_parser()
     args = parser.parse_args(argv)
+    try:
+        if args.command == "list-providers":
+            for name in list_provider_names():
+                print(name)
+            return
+        if args.command == "list-workflows":
+            _cmd_list_workflows(args.provider)
+            return
+        if args.command == "show-params":
+            _cmd_show_params(args.provider, args.workflow)
+            return
+        if args.command == "execute":
+            _cmd_execute(args)
+            return
 
-    if args.command == "list-providers":
-        for name in list_provider_names():
-            print(name)
-        return
+        provider = None
+        if args.command == "run":
+            provider = args.provider
+        elif args.provider:
+            provider = args.provider
+        elif args.target_package:
+            provider = args.target_package
 
-    provider = None
-    if args.command == "run":
-        provider = args.provider
-    elif args.provider:
-        provider = args.provider
-    elif args.target_package:
-        provider = args.target_package
+        if not provider:
+            parser.error("a provider is required, use: renderflow run --provider <name>")
 
-    if not provider:
-        parser.error("a provider is required, use: renderflow run --provider <name>")
+        from renderflow.streamlit_renderer import launch_streamlit_renderer
 
-    launch_streamlit_renderer(provider)
+        launch_streamlit_renderer(provider)
+    except (InvalidFigureFormatError, InvalidWorkflowResultsError) as exc:
+        parser.error(str(exc))
