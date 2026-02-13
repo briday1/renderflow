@@ -10,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from renderflow.discovery import load_app_spec
 from renderflow.results import InvalidWorkflowResultsError, normalize_results, save_figures
@@ -125,30 +126,25 @@ def _make_progress_callback(status_panel):
                 html_lines.append("<li><span class='wr-live-spinner'></span>" f"{running_text}</li>")
             else:
                 html_lines.append(f"<li>{html.escape(line)}</li>")
-        progress_window.markdown(
-            (
-                "<style>"
-                ".wr-live-scroll{max-height:12rem;overflow-y:auto;padding-right:0.3rem;}"
-                ".wr-live-list{margin:0.25rem 0 0.25rem 1.1rem;padding:0;}"
-                ".wr-live-list li{margin:0.2rem 0;list-style:disc;}"
-                ".wr-live-spinner{display:inline-block;width:0.85rem;height:0.85rem;"
-                "margin-right:0.45rem;border:2px solid currentColor;border-top-color:transparent;"
-                "border-radius:50%;vertical-align:-0.1rem;animation:wrspin 0.8s linear infinite;}"
-                "@keyframes wrspin{to{transform:rotate(360deg);}}"
-                "</style>"
-                f"<div class='wr-live-scroll'><ul class='wr-live-list'>{''.join(html_lines)}</ul></div>"
-                "<script>"
-                "(function(){"
-                "const docs=[document,window.parent&&window.parent.document].filter(Boolean);"
-                "for(const d of docs){"
-                "const nodes=d.querySelectorAll('.wr-live-scroll');"
-                "if(nodes.length){const el=nodes[nodes.length-1];el.scrollTop=el.scrollHeight;break;}"
-                "}"
-                "})();"
-                "</script>"
-            ),
-            unsafe_allow_html=True,
+        html_payload = (
+            "<style>"
+            "body{margin:0;padding:0;}"
+            ".wr-live-scroll{max-height:12rem;overflow-y:auto;padding-right:0.3rem;}"
+            ".wr-live-list{margin:0.25rem 0 0.25rem 1.1rem;padding:0;}"
+            ".wr-live-list li{margin:0.2rem 0;list-style:disc;}"
+            ".wr-live-spinner{display:inline-block;width:0.85rem;height:0.85rem;"
+            "margin-right:0.45rem;border:2px solid currentColor;border-top-color:transparent;"
+            "border-radius:50%;vertical-align:-0.1rem;animation:wrspin 0.8s linear infinite;}"
+            "@keyframes wrspin{to{transform:rotate(360deg);}}"
+            "</style>"
+            f"<div id='wr-live-scroll' class='wr-live-scroll'><ul class='wr-live-list'>{''.join(html_lines)}</ul></div>"
+            "<script>"
+            "const el=document.getElementById('wr-live-scroll');"
+            "if(el){el.scrollTop=el.scrollHeight;}"
+            "</script>"
         )
+        with progress_window.container():
+            components.html(html_payload, height=210, scrolling=False)
 
     def progress_callback(step, status, detail=""):
         line = f"{step}"
