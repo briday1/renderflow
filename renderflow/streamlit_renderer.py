@@ -187,17 +187,18 @@ def run_renderer(provider: str):
         st.warning("No workflows discovered.")
         return
 
+    st.sidebar.markdown("---")
     workflow_ids = [w.id for w in app_spec.workflows]
     workflow_map = {w.id: w for w in app_spec.workflows}
     if len(workflow_ids) > 1:
-        selected_id = st.selectbox(
+        selected_id = st.sidebar.selectbox(
             "Workflow",
             options=workflow_ids,
             format_func=lambda x: workflow_map[x].name,
         )
     else:
         selected_id = workflow_ids[0]
-        st.subheader(workflow_map[selected_id].name)
+        st.sidebar.subheader(workflow_map[selected_id].name)
     wf = workflow_map[selected_id]
     if wf.description:
         st.sidebar.caption(wf.description)
