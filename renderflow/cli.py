@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import Any, Sequence
 
 import pandas as pd
@@ -254,3 +255,107 @@ def main(argv: Sequence[str] | None = None):
         launch_streamlit_renderer(provider)
     except (InvalidFigureFormatError, InvalidWorkflowResultsError) as exc:
         parser.error(str(exc))
+
+
+def _build_provider_parser(prog: str, description: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog, description=description)
+    sub = parser.add_subparsers(dest="command")
+
+    sub.add_parser("list", help="List available workflows")
+    sub.add_parser("run", help="Launch Streamlit app")
+
+    show_params = sub.add_parser("show-params", help="Show workflow parameter definitions")
+    show_params.add_argument("--workflow", required=True, help="Workflow id")
+
+    execute = sub.add_parser("execute", help="Execute a workflow")
+    execute.add_argument("--workflow", required=True, help="Workflow id")
+    execute.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Workflow parameter value (repeatable).",
+    )
+    execute.add_argument(
+        "--init",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Deprecated alias for --param (repeatable).",
+    )
+    execute.add_argument("--html", help="Optional output path for one combined workflow HTML report.")
+    execute.add_argument(
+        "--save-figures-dir",
+        help="Optional directory to save individual figure files.",
+    )
+    execute.add_argument(
+        "--figure-format",
+        action="append",
+        default=None,
+        metavar="FORMAT[,FORMAT]",
+        help="Figure format for --save-figures-dir (repeatable).",
+    )
+    execute.add_argument(
+        "--output",
+        choices=["terminal", "json", "none"],
+        default="terminal",
+        help="How to emit results to stdout.",
+    )
+    return parser
+
+
+def provider_main(
+    provider_name: str,
+    argv: Sequence[str] | None = None,
+    prog_name: str | None = None,
+    description: str | None = None,
+):
+    """
+    Provider-scoped CLI wrapper.
+
+    This keeps provider packages minimal while renderflow owns CLI behavior.
+    """
+    prog = prog_name or provider_name
+    desc = description or f"{provider_name} CLI"
+    parser = _build_provider_parser(prog=prog, description=desc)
+    raw_args = list(argv) if argv is not None else sys.argv[1:]
+    parsed = parser.parse_args(raw_args)
+    if not parsed.command:
+        parser.print_help()
+        return 0
+
+    if parsed.command == "list":
+        return main(["list-workflows", "--provider", provider_name])
+    if parsed.command == "run":
+        return main(["run", "--provider", provider_name])
+    if parsed.command == "show-params":
+        return main(
+            [
+                "show-params",
+                "--provider",
+                provider_name,
+                "--workflow",
+                parsed.workflow,
+            ]
+        )
+
+    forwarded: list[str] = [
+        "execute",
+        "--provider",
+        provider_name,
+        "--workflow",
+        parsed.workflow,
+        "--output",
+        parsed.output,
+    ]
+    for value in parsed.init or []:
+        forwarded.extend(["--init", value])
+    for value in parsed.param or []:
+        forwarded.extend(["--param", value])
+    if parsed.html:
+        forwarded.extend(["--html", parsed.html])
+    if parsed.save_figures_dir:
+        forwarded.extend(["--save-figures-dir", parsed.save_figures_dir])
+    for value in parsed.figure_format or []:
+        forwarded.extend(["--figure-format", value])
+    return main(forwarded)
