@@ -164,3 +164,12 @@ Workflow parameters are pulled from:
 3. inferred function signature defaults
 
 This lets packages like `crsd-inspector` keep only workflow definitions and optional init logic, while `renderflow` handles CLI + Streamlit parameter interpretation and rendering.
+
+## Minimal Example Provider
+
+A tiny runnable provider is included at `examples/minimal-provider`.
+
+It shows the smallest practical setup:
+- provider contract in `minimal_provider/renderflow.py`
+- workflow modules in `minimal_provider/workflows/`
+- no custom renderer or custom CLI
