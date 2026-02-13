@@ -28,22 +28,37 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Bump patch version in pyproject.toml
+      - name: Bump YYYY.v version in pyproject.toml
         id: bump
         run: |
           python - <<'PY'
           import re
+          from datetime import datetime, timezone
           from pathlib import Path
 
           pyproject = Path('pyproject.toml')
           text = pyproject.read_text(encoding='utf-8')
 
-          m = re.search(r'^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"\s*$', text, flags=re.MULTILINE)
+          m = re.search(r'^version\s*=\s*"([^"]+)"\s*$', text, flags=re.MULTILINE)
           if not m:
             raise SystemExit('Could not find [project] version in pyproject.toml')
 
-          major, minor, patch = map(int, m.groups())
-          new_version = f"{major}.{minor}.{patch + 1}"
+          current_version = m.group(1).strip()
+          current_year = datetime.now(timezone.utc).year
+          v = 1
+          y = current_year
+
+          ym = re.fullmatch(r'(\d{4})\.(\d+)', current_version)
+          if ym:
+            y = int(ym.group(1))
+            v = int(ym.group(2))
+            if y == current_year:
+              v += 1
+            else:
+              y = current_year
+              v = 1
+
+          new_version = f"{y}.{v}"
 
           old_line = m.group(0)
           new_line = f'version = "{new_version}"'
