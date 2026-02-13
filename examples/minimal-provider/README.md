@@ -75,8 +75,8 @@ Yes, this provider can be deployed as a `.streamlit.app`.
 
 Required files are included:
 - `app.py` (Streamlit entrypoint)
-- `requirements.txt` (runtime dependencies)
 - `minimal_provider/...` (provider package)
+- `pyproject.toml` (runtime dependencies + entrypoint registration)
 
 Deployment steps:
 1. Push `examples/minimal-provider` contents to a GitHub repo (recommended as repo root).
@@ -85,8 +85,9 @@ Deployment steps:
 4. Deploy.
 
 Notes:
-- `app.py` uses `minimal_provider` (module name) so it works even without installed entrypoints.
-- If `renderflow` is not available on PyPI for your version, edit `requirements.txt` to use the GitHub line for `renderflow`.
+- This example does not use `app_definition.py`.
+- `app.py` uses `minimal-provider` (entrypoint name), so provider loading does not depend on module fallback behavior.
+- `pyproject.toml` pins `renderflow` from GitHub `main` to keep Streamlit Cloud on the latest behavior.
 - Image export formats (`png/jpg/svg/pdf`) require `kaleido` (already listed).
 
 ## API Summary
