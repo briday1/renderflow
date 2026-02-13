@@ -119,6 +119,8 @@ def _make_progress_callback(status_panel):
     def render_progress_window():
         active_entry = progress_state["active_entry"]
         lines = completed_entries + ([active_entry] if active_entry else [])
+        # Keep latest updates visible without relying on iframe auto-scroll behavior.
+        lines = list(reversed(lines))
         html_lines = []
         for line in lines:
             if line.startswith("__RUNNING__::"):
@@ -129,7 +131,7 @@ def _make_progress_callback(status_panel):
         html_payload = (
             "<style>"
             "body{margin:0;padding:0;}"
-            ".wr-live-scroll{max-height:12rem;overflow-y:auto;padding-right:0.3rem;}"
+            ".wr-live-scroll{height:12rem;max-height:12rem;overflow-y:auto;padding-right:0.3rem;}"
             ".wr-live-list{margin:0.25rem 0 0.25rem 1.1rem;padding:0;}"
             ".wr-live-list li{margin:0.2rem 0;list-style:disc;}"
             ".wr-live-spinner{display:inline-block;width:0.85rem;height:0.85rem;"
@@ -137,11 +139,8 @@ def _make_progress_callback(status_panel):
             "border-radius:50%;vertical-align:-0.1rem;animation:wrspin 0.8s linear infinite;}"
             "@keyframes wrspin{to{transform:rotate(360deg);}}"
             "</style>"
+            "<div style='font-size:0.8rem;opacity:0.8;margin:0 0 0.2rem 0;'>Latest first</div>"
             f"<div id='wr-live-scroll' class='wr-live-scroll'><ul class='wr-live-list'>{''.join(html_lines)}</ul></div>"
-            "<script>"
-            "const el=document.getElementById('wr-live-scroll');"
-            "if(el){el.scrollTop=el.scrollHeight;}"
-            "</script>"
         )
         with progress_window.container():
             components.html(html_payload, height=210, scrolling=False)
