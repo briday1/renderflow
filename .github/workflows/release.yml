@@ -1,0 +1,77 @@
+name: Release to PyPI
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bump patch version in pyproject.toml
+        id: bump
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          pyproject = Path('pyproject.toml')
+          text = pyproject.read_text(encoding='utf-8')
+
+          m = re.search(r'^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"\s*$', text, flags=re.MULTILINE)
+          if not m:
+            raise SystemExit('Could not find [project] version in pyproject.toml')
+
+          major, minor, patch = map(int, m.groups())
+          new_version = f"{major}.{minor}.{patch + 1}"
+
+          old_line = m.group(0)
+          new_line = f'version = "{new_version}"'
+          text = text.replace(old_line, new_line, 1)
+          pyproject.write_text(text, encoding='utf-8')
+
+          out = Path(__import__('os').environ['GITHUB_OUTPUT'])
+          out.write_text(f"new_version={new_version}\n", encoding='utf-8')
+          PY
+
+      - name: Commit and push version bump
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore(release): bump version to ${NEW_VERSION} [skip release]"
+          git push origin main
+
+      - name: Install build backend
+        run: python -m pip install --upgrade build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_TOKEN }}
