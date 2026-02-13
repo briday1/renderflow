@@ -11,6 +11,12 @@ Workflow runtime and rendering API for:
 `renderflow` owns the interface contract and rendering behavior.
 Provider packages should mostly define workflows (`run_workflow` + params), not custom UI/CLI plumbing.
 
+## Demo App
+
+Live Streamlit demo:
+
+https://demo-for-renderflow.streamlit.app/
+
 ## CLI
 
 List installed providers:
@@ -160,12 +166,3 @@ Workflow parameters are pulled from:
 3. inferred function signature defaults
 
 This lets packages like `crsd-inspector` keep only workflow definitions and optional init logic, while `renderflow` handles CLI + Streamlit parameter interpretation and rendering.
-
-## Minimal Example Provider
-
-A tiny runnable provider is included at `examples/minimal-provider`.
-
-It shows the smallest practical setup:
-- provider contract in `minimal_provider/renderflow.py`
-- workflow modules in `minimal_provider/workflows/`
-- no custom renderer or custom CLI
