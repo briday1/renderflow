@@ -1,0 +1,10 @@
+# Option A: if renderflow is published to PyPI, keep this line:
+renderflow>=0.1.0
+
+# Option B: if you need latest from GitHub, replace the line above with:
+# renderflow @ git+https://github.com/briday1/renderflow.git@main
+
+streamlit>=1.31.0
+plotly>=5.18.0
+kaleido>=0.2.1
+-e .
