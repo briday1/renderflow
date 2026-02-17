@@ -22,6 +22,14 @@ from renderflow.results import (
 )
 
 
+def _enable_shell_completion(parser: argparse.ArgumentParser) -> None:
+    try:
+        import argcomplete  # type: ignore[import-not-found]
+    except ImportError:
+        return
+    argcomplete.autocomplete(parser)
+
+
 def _parse_kv(values: list[str] | None) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for item in values or []:
@@ -283,6 +291,7 @@ def main(argv: Sequence[str] | None = None):
             )
 
     parser = _build_parser()
+    _enable_shell_completion(parser)
     args = parser.parse_args(argv)
     try:
         if args.command == "list-providers":
@@ -418,6 +427,7 @@ def provider_main(
     prog = prog_name or provider_name
     desc = description or f"{provider_name} CLI"
     parser = _build_provider_parser(prog=prog, description=desc, provider_name=provider_name)
+    _enable_shell_completion(parser)
     raw_args = list(argv) if argv is not None else sys.argv[1:]
     parsed = parser.parse_args(raw_args)
     if not parsed.command:

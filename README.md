@@ -119,6 +119,21 @@ Launch Streamlit:
 renderflow run --provider crsd-inspector
 ```
 
+## Shell Completion
+
+Tab completion is supported via `argcomplete` for both:
+- `renderflow ...`
+- provider-scoped commands (for example `crsd-inspector ...`)
+
+Activate in Bash for current shell:
+
+```bash
+eval "$(register-python-argcomplete renderflow)"
+eval "$(register-python-argcomplete crsd-inspector)"
+```
+
+After activation, workflow subcommands and options complete with `Tab`.
+
 ## Workflow Result Contract
 
 Use `renderflow.workflow.Workflow` inside provider workflows:
