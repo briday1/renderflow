@@ -51,15 +51,62 @@ def test_param_mapping_accepts_description_alias():
     assert specs[0].help == "Alpha value"
 
 
-def test_provider_help_includes_workflow_params(monkeypatch, capsys):
+def test_provider_help_lists_workflows(monkeypatch, capsys):
     monkeypatch.setattr(cli, "load_app_spec", lambda provider: _make_provider_app())
     with pytest.raises(SystemExit):
         cli.provider_main("crsd-inspector", argv=["-h"])
     output = capsys.readouterr().out
-    assert "Workflows and parameters:" in output
+    assert "Available workflows:" in output
     assert "- signal_analysis: Signal Analysis" in output
+
+
+def test_workflow_help_shows_only_workflow_params(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "load_app_spec", lambda provider: _make_provider_app())
+    with pytest.raises(SystemExit):
+        cli.provider_main("crsd-inspector", argv=["signal_analysis", "-h"])
+    output = capsys.readouterr().out
+    assert "Workflow parameters:" in output
     assert "crsd_file: text | default='sample.crsd' | Path to the CRSD file." in output
     assert "window_size: number | default=1024 | FFT window size." in output
+
+
+def test_workflow_command_forwards_to_execute(monkeypatch):
+    forwarded_calls: list[list[str]] = []
+
+    def _fake_main(argv=None):
+        forwarded_calls.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr(cli, "main", _fake_main)
+    monkeypatch.setattr(
+        cli,
+        "load_app_spec",
+        lambda provider: _make_provider_app(),
+    )
+
+    cli.provider_main(
+        "crsd-inspector",
+        argv=[
+            "signal_analysis",
+            "--param",
+            "crsd_file=data.crsd",
+            "--output",
+            "none",
+        ],
+    )
+    assert forwarded_calls == [
+        [
+            "execute",
+            "--provider",
+            "crsd-inspector",
+            "--workflow",
+            "signal_analysis",
+            "--output",
+            "none",
+            "--param",
+            "crsd_file=data.crsd",
+        ]
+    ]
 
 
 def test_main_autodetects_provider_from_program_name(monkeypatch):

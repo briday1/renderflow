@@ -44,7 +44,9 @@ Provider-scoped CLI (no provider `cli.py` needed):
 crsd-inspector = "renderflow.cli:main"
 ```
 
-With that entrypoint, `crsd-inspector -h` shows workflows plus parameter defaults/help pulled from provider workflow specs.
+With that entrypoint:
+- `crsd-inspector -h` shows available workflows.
+- `crsd-inspector range_doppler_processing -h` shows only that workflow's parameters/defaults/help.
 
 Execute a workflow in terminal mode:
 

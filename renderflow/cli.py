@@ -222,6 +222,41 @@ def _cmd_execute(args):
         print(json.dumps(results, default=str))
 
 
+def _add_execute_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Workflow parameter value (repeatable).",
+    )
+    parser.add_argument(
+        "--init",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Deprecated alias for --param (repeatable).",
+    )
+    parser.add_argument("--html", help="Optional output path for one combined workflow HTML report.")
+    parser.add_argument(
+        "--save-figures-dir",
+        help="Optional directory to save individual figure files.",
+    )
+    parser.add_argument(
+        "--figure-format",
+        action="append",
+        default=None,
+        metavar="FORMAT[,FORMAT]",
+        help="Figure format for --save-figures-dir (repeatable).",
+    )
+    parser.add_argument(
+        "--output",
+        choices=["terminal", "json", "none"],
+        default="terminal",
+        help="How to emit results to stdout.",
+    )
+
+
 def _resolve_provider_from_prog(prog_name: str) -> str | None:
     normalized = prog_name.strip()
     if not normalized:
@@ -297,14 +332,33 @@ def _build_provider_help_epilog(provider_name: str) -> str:
     except Exception:
         return ""
 
-    lines: list[str] = ["", "Workflows and parameters:"]
+    lines: list[str] = ["", "Available workflows:"]
     for wf in app.workflows:
         lines.append(f"- {wf.id}: {wf.name}")
         if wf.description:
             lines.append(f"  {wf.description}")
-        if not wf.params:
-            lines.append("  (no parameters)")
-            continue
+    return "\n".join(lines)
+
+
+def _build_workflow_help_epilog(provider_name: str, workflow_id: str) -> str:
+    try:
+        app = load_app_spec(provider_name)
+    except Exception:
+        return ""
+
+    wf_map = {wf.id: wf for wf in app.workflows}
+    wf = wf_map.get(workflow_id)
+    if wf is None:
+        return ""
+
+    lines: list[str] = [""]
+    if wf.description:
+        lines.append(wf.description)
+        lines.append("")
+    lines.append("Workflow parameters:")
+    if not wf.params:
+        lines.append("  (no parameters)")
+    else:
         for spec in wf.params:
             lines.append(_format_param_help_line(spec))
     return "\n".join(lines)
@@ -327,38 +381,26 @@ def _build_provider_parser(prog: str, description: str, provider_name: str) -> a
 
     execute = sub.add_parser("execute", help="Execute a workflow")
     execute.add_argument("--workflow", required=True, help="Workflow id")
-    execute.add_argument(
-        "--param",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help="Workflow parameter value (repeatable).",
-    )
-    execute.add_argument(
-        "--init",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help="Deprecated alias for --param (repeatable).",
-    )
-    execute.add_argument("--html", help="Optional output path for one combined workflow HTML report.")
-    execute.add_argument(
-        "--save-figures-dir",
-        help="Optional directory to save individual figure files.",
-    )
-    execute.add_argument(
-        "--figure-format",
-        action="append",
-        default=None,
-        metavar="FORMAT[,FORMAT]",
-        help="Figure format for --save-figures-dir (repeatable).",
-    )
-    execute.add_argument(
-        "--output",
-        choices=["terminal", "json", "none"],
-        default="terminal",
-        help="How to emit results to stdout.",
-    )
+    _add_execute_arguments(execute)
+
+    reserved = {"list", "run", "show-params", "execute"}
+    try:
+        app = load_app_spec(provider_name)
+    except Exception:
+        app = None
+    if app is not None:
+        for wf in app.workflows:
+            if wf.id in reserved:
+                continue
+            wf_parser = sub.add_parser(
+                wf.id,
+                help=f"Execute workflow '{wf.id}'",
+                description=f"Execute workflow '{wf.id}'",
+                epilog=_build_workflow_help_epilog(provider_name, wf.id),
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+            )
+            wf_parser.set_defaults(workflow_id=wf.id, _workflow_command=True)
+            _add_execute_arguments(wf_parser)
     return parser
 
 
@@ -396,6 +438,27 @@ def provider_main(
                 parsed.workflow,
             ]
         )
+    if getattr(parsed, "_workflow_command", False):
+        forwarded: list[str] = [
+            "execute",
+            "--provider",
+            provider_name,
+            "--workflow",
+            parsed.workflow_id,
+            "--output",
+            parsed.output,
+        ]
+        for value in parsed.init or []:
+            forwarded.extend(["--init", value])
+        for value in parsed.param or []:
+            forwarded.extend(["--param", value])
+        if parsed.html:
+            forwarded.extend(["--html", parsed.html])
+        if parsed.save_figures_dir:
+            forwarded.extend(["--save-figures-dir", parsed.save_figures_dir])
+        for value in parsed.figure_format or []:
+            forwarded.extend(["--figure-format", value])
+        return main(forwarded)
 
     forwarded: list[str] = [
         "execute",
