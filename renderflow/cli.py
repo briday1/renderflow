@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any, Sequence
 
 import pandas as pd
@@ -221,7 +222,31 @@ def _cmd_execute(args):
         print(json.dumps(results, default=str))
 
 
+def _resolve_provider_from_prog(prog_name: str) -> str | None:
+    normalized = prog_name.strip()
+    if not normalized:
+        return None
+    canonical = normalized.lower().replace("_", "-")
+    providers = list_provider_names()
+    matches = [name for name in providers if name.lower().replace("_", "-") == canonical]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 def main(argv: Sequence[str] | None = None):
+    if argv is None:
+        prog_stem = Path(sys.argv[0]).stem
+        reserved_prog_names = {"renderflow", "workflow-renderer-streamlit"}
+        provider_from_prog = _resolve_provider_from_prog(prog_stem)
+        if provider_from_prog and prog_stem not in reserved_prog_names:
+            return provider_main(
+                provider_name=provider_from_prog,
+                argv=sys.argv[1:],
+                prog_name=prog_stem,
+                description=f"{provider_from_prog} workflow CLI",
+            )
+
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
@@ -257,8 +282,41 @@ def main(argv: Sequence[str] | None = None):
         parser.error(str(exc))
 
 
-def _build_provider_parser(prog: str, description: str) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=prog, description=description)
+def _format_param_help_line(spec) -> str:
+    details: list[str] = [spec.type]
+    if spec.default is not None:
+        details.append(f"default={spec.default!r}")
+    if spec.help:
+        details.append(spec.help)
+    return f"  - {spec.key}: " + " | ".join(details)
+
+
+def _build_provider_help_epilog(provider_name: str) -> str:
+    try:
+        app = load_app_spec(provider_name)
+    except Exception:
+        return ""
+
+    lines: list[str] = ["", "Workflows and parameters:"]
+    for wf in app.workflows:
+        lines.append(f"- {wf.id}: {wf.name}")
+        if wf.description:
+            lines.append(f"  {wf.description}")
+        if not wf.params:
+            lines.append("  (no parameters)")
+            continue
+        for spec in wf.params:
+            lines.append(_format_param_help_line(spec))
+    return "\n".join(lines)
+
+
+def _build_provider_parser(prog: str, description: str, provider_name: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description=description,
+        epilog=_build_provider_help_epilog(provider_name),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("list", help="List available workflows")
@@ -317,7 +375,7 @@ def provider_main(
     """
     prog = prog_name or provider_name
     desc = description or f"{provider_name} CLI"
-    parser = _build_provider_parser(prog=prog, description=desc)
+    parser = _build_provider_parser(prog=prog, description=desc, provider_name=provider_name)
     raw_args = list(argv) if argv is not None else sys.argv[1:]
     parsed = parser.parse_args(raw_args)
     if not parsed.command:

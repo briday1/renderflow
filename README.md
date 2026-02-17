@@ -37,6 +37,15 @@ Show interpreted workflow parameters:
 renderflow show-params --provider crsd-inspector --workflow signal_analysis
 ```
 
+Provider-scoped CLI (no provider `cli.py` needed):
+
+```toml
+[project.scripts]
+crsd-inspector = "renderflow.cli:main"
+```
+
+With that entrypoint, `crsd-inspector -h` shows workflows plus parameter defaults/help pulled from provider workflow specs.
+
 Execute a workflow in terminal mode:
 
 ```bash
@@ -117,7 +126,12 @@ from renderflow.workflow import Workflow
 
 workflow = Workflow(name="My Workflow", description="...")
 workflow.params = {
-    "threshold": {"type": "number", "default": 0.5, "label": "Threshold"},
+    "threshold": {
+        "type": "number",
+        "default": 0.5,
+        "label": "Threshold",
+        "description": "Minimum score to keep",
+    },
 }
 
 workflow.add_text("Summary text")

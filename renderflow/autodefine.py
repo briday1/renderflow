@@ -28,7 +28,7 @@ def _param_specs_from_mapping(params: dict[str, Any] | None) -> list[ParamSpec]:
                 max=cfg.get("max"),
                 step=cfg.get("step"),
                 options=cfg.get("options", []),
-                help=cfg.get("help", ""),
+                help=cfg.get("help", cfg.get("description", "")),
             )
         )
     return specs
