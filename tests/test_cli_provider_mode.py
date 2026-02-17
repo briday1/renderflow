@@ -66,8 +66,8 @@ def test_workflow_help_shows_only_workflow_params(monkeypatch, capsys):
         cli.provider_main("crsd-inspector", argv=["signal_analysis", "-h"])
     output = capsys.readouterr().out
     assert "Workflow parameters:" in output
-    assert "crsd_file: text | default='sample.crsd' | Path to the CRSD file." in output
-    assert "window_size: number | default=1024 | FFT window size." in output
+    assert "crsd_file: default='sample.crsd' - Path to the CRSD file." in output
+    assert "window_size: default=1024 - FFT window size." in output
 
 
 def test_workflow_command_forwards_to_execute(monkeypatch):

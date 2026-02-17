@@ -172,9 +172,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _print_specs(specs):
     for spec in specs:
-        default = f" default={spec.default!r}" if spec.default is not None else ""
-        help_text = f" - {spec.help}" if spec.help else ""
-        print(f"- {spec.key} ({spec.type}){default}{help_text}")
+        default = f"default={spec.default!r}" if spec.default is not None else "default=None"
+        description = spec.help or "No description."
+        print(f"- {spec.key}: {default} - {description}")
 
 
 def _cmd_list_workflows(provider: str):
@@ -327,12 +327,9 @@ def main(argv: Sequence[str] | None = None):
 
 
 def _format_param_help_line(spec) -> str:
-    details: list[str] = [spec.type]
-    if spec.default is not None:
-        details.append(f"default={spec.default!r}")
-    if spec.help:
-        details.append(spec.help)
-    return f"  - {spec.key}: " + " | ".join(details)
+    default = f"default={spec.default!r}" if spec.default is not None else "default=None"
+    description = spec.help or "No description."
+    return f"  - {spec.key}: {default} - {description}"
 
 
 def _build_provider_help_epilog(provider_name: str) -> str:
