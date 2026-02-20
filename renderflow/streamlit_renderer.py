@@ -130,10 +130,12 @@ def _make_progress_callback(status_panel):
                 html_lines.append(f"<li>{html.escape(line)}</li>")
         html_payload = (
             "<style>"
-            "body{margin:0;padding:0;}"
-            ".wr-live-scroll{height:12rem;max-height:12rem;overflow-y:auto;padding-right:0.3rem;}"
+            "body{margin:0;padding:0;color:#111;background:transparent;}"
+            "@media (prefers-color-scheme: dark){body{color:#f2f5fa;}}"
+            ".wr-live-scroll{height:12rem;max-height:12rem;overflow-y:auto;padding-right:0.3rem;"
+            "color:inherit;background:transparent;}"
             ".wr-live-list{margin:0.25rem 0 0.25rem 1.1rem;padding:0;}"
-            ".wr-live-list li{margin:0.2rem 0;list-style:disc;}"
+            ".wr-live-list li{margin:0.2rem 0;list-style:disc;color:inherit;}"
             ".wr-live-spinner{display:inline-block;width:0.85rem;height:0.85rem;"
             "margin-right:0.45rem;border:2px solid currentColor;border-top-color:transparent;"
             "border-radius:50%;vertical-align:-0.1rem;animation:wrspin 0.8s linear infinite;}"
