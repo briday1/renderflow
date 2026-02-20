@@ -141,7 +141,7 @@ def _make_progress_callback(status_panel):
             "border-radius:50%;vertical-align:-0.1rem;animation:wrspin 0.8s linear infinite;}"
             "@keyframes wrspin{to{transform:rotate(360deg);}}"
             "</style>"
-            "<div style='font-size:0.8rem;opacity:0.8;margin:0 0 0.2rem 0;'>Latest first</div>"
+            "<div style='font-size:0.8rem;opacity:0.8;margin:0 0 0.2rem 0;'>Workflow Progress</div>"
             f"<div id='wr-live-scroll' class='wr-live-scroll'><ul class='wr-live-list'>{''.join(html_lines)}</ul></div>"
         )
         with progress_window.container():
@@ -159,9 +159,9 @@ def _make_progress_callback(status_panel):
             started = step_start_times.get(step)
             if started is not None:
                 elapsed = time.perf_counter() - started
-                completed_entries.append(f"OK {line} ({elapsed:.3f}s)")
+                completed_entries.append(f"DONE {line} ({elapsed:.3f}s)")
             else:
-                completed_entries.append(f"OK {line}")
+                completed_entries.append(f"DONE {line}")
             progress_state["active_entry"] = None
         elif status == "failed":
             completed_entries.append(f"FAILED {line}")
