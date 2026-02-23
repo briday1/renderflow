@@ -184,6 +184,13 @@ my-provider = "my_provider.app_definition:get_app_spec"
 
 ### 2) Auto-Defined Provider (minimal)
 
+Entry point (no local `app_definition.py` or `renderflow.py` shim required):
+
+```toml
+[project.entry-points."renderflow.providers"]
+my-provider = "renderflow.autodefine:auto_build_app_spec"
+```
+
 If no `app_definition` exists, `renderflow` auto-builds from:
 - `<provider>.workflows.*` modules with `run_workflow(...)`
 - optional `<provider>.renderflow` module:
