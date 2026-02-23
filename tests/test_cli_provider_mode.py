@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from renderflow import cli
-from renderflow.autodefine import _param_specs_from_mapping, auto_build_app_spec, coerce_to_app_spec
+from renderflow.autodefine import _param_specs_from_mapping
 from renderflow.contracts import AppSpec, ParamSpec, WorkflowSpec
 
 
@@ -124,14 +124,3 @@ def test_main_autodetects_provider_from_program_name(monkeypatch):
 
     assert exit_code == 0
     assert calls == [("crsd-inspector", ["list"], "crsd-inspector")]
-
-
-def test_coerce_to_app_spec_supports_provider_name_factory(monkeypatch):
-    monkeypatch.setattr(
-        "renderflow.autodefine.auto_build_app_spec",
-        lambda provider_name: AppSpec(app_name=provider_name, initializers=[], workflows=[]),
-    )
-
-    app_spec = coerce_to_app_spec(auto_build_app_spec, provider_name="minimal-provider")
-
-    assert app_spec.app_name == "minimal-provider"

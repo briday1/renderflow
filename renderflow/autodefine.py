@@ -180,28 +180,7 @@ def _dict_to_app_spec(raw: dict[str, Any]) -> AppSpec:
 
 def coerce_to_app_spec(obj: Any, provider_name: str | None = None) -> AppSpec:
     if callable(obj) and not isinstance(obj, type):
-        try:
-            sig = inspect.signature(obj)
-        except (TypeError, ValueError):
-            sig = None
-
-        if sig is not None:
-            positional_params = [
-                p
-                for p in sig.parameters.values()
-                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-            ]
-            required_positional = [p for p in positional_params if p.default is inspect.Parameter.empty]
-            has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values())
-
-            # Allow generic factories like auto_build_app_spec(provider_name) to be used
-            # directly as entry points. Existing zero-arg factories continue to work.
-            if provider_name is not None and (has_varargs or len(required_positional) >= 1):
-                obj = obj(provider_name)
-            else:
-                obj = obj()
-        else:
-            obj = obj()
+        obj = obj()
     if isinstance(obj, AppSpec):
         return obj
     if is_dataclass(obj):
