@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "renderflow"
-version = "2026.9"
+version = "2026.10"
 description = "Generic workflow app runtime and Streamlit renderer with provider plugins"
 readme = "README.md"
 requires-python = ">=3.9"
