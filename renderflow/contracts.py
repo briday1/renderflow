@@ -17,7 +17,10 @@ class ParamSpec:
     min: float | None = None
     max: float | None = None
     step: float | None = None
-    options: list[dict[str, Any]] = field(default_factory=list)
+    # `options` may be:
+    # - list[dict]: static dropdown options
+    # - callable(values, spec) -> list[dict] | list[Any]: dynamic options
+    options: Any = field(default_factory=list)
     help: str = ""
 
 

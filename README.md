@@ -197,3 +197,11 @@ Workflow parameters are pulled from:
 3. inferred function signature defaults
 
 This lets packages like `crsd-inspector` keep only workflow definitions and optional init logic, while `renderflow` handles CLI + Streamlit parameter interpretation and rendering.
+
+### Dynamic Dropdown Options
+
+For `dropdown` params, `options` can be either:
+- a static list (`[{"label": ..., "value": ...}]` or `[value1, value2]`)
+- a callable: `options(values, spec)` that returns options dynamically
+
+`values` contains current parameter values during Streamlit rendering, so providers can implement dependent dropdowns (for example, file list based on selected directory).

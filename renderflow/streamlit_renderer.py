@@ -13,21 +13,38 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from renderflow.discovery import load_app_spec
+from renderflow.param_options import resolve_dropdown_options
 from renderflow.results import InvalidWorkflowResultsError, normalize_results, save_figures
 
 
 def _render_param_inputs(prefix: str, params) -> dict[str, Any]:
+    # Seed from session/default values so dynamic option providers can depend on prior inputs.
     values: dict[str, Any] = {}
     for spec in params:
         key = f"{prefix}_{spec.key}"
+        if key in st.session_state:
+            values[spec.key] = st.session_state[key]
+        elif spec.default is not None:
+            values[spec.key] = spec.default
+
+    for spec in params:
+        key = f"{prefix}_{spec.key}"
         if spec.type == "dropdown":
-            options = [opt.get("value") for opt in spec.options]
-            labels_map = {opt.get("value"): opt.get("label", opt.get("value")) for opt in spec.options}
-            default_idx = options.index(spec.default) if spec.default in options else 0
+            options_spec = resolve_dropdown_options(spec, values)
+            options = [opt.get("value") for opt in options_spec]
+            labels_map = {opt.get("value"): opt.get("label", opt.get("value")) for opt in options_spec}
+            current_value = st.session_state.get(key, values.get(spec.key, spec.default))
+            if current_value in options:
+                selected_value = current_value
+            elif spec.default in options:
+                selected_value = spec.default
+            else:
+                selected_value = options[0]
+            default_idx = options.index(selected_value)
             val = st.sidebar.selectbox(
                 spec.label,
                 options=options,
-                index=default_idx if options else 0,
+                index=default_idx,
                 format_func=lambda x: labels_map.get(x, x),
                 key=key,
                 help=spec.help or None,
